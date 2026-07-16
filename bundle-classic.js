@@ -6450,7 +6450,7 @@
 
         // ⚠️ PENTING: GANTI URL INI DENGAN URL DEPLOY GOOGLE APPS SCRIPT ANDA ⚠️
         // PASTE URL GOOGLE APPS SCRIPT ANDA DI BAWAH INI:
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzPixa15u3SyndcKTcusIpxChqepUsgGfxTm1_nIaD1RHo-3TpLRbkHmesm-p2QkgWjEA/exec";
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwjrC0JgqBEtnWWG-aAOpbBKW2X6cpgTz-zUHv2oAzgWzXWXQwtV89FBnLNOrn5Vnsl/exec";
         const APP_SECRET = "TKD-2025-s3cr3t-k3y-9xKm2pQr7nVw4L";
         // ID produk harus cocok persis dengan key di PRODUCTS object di appscript.txt (GAS).
         // Tanpa ini, server fallback cari email di SEMUA sheet → email VocaLive/TikDance dll. bisa login ke AffGo.
