@@ -1,8 +1,14 @@
 // Auto-generated runtime loader for thin Canvas shell.
+// Fetches body.html + bundle-classic.js + bundle-module.js from jsDelivr,
+// patches DOMContentLoaded semantics so dynamically-loaded scripts see the
+// event fire even though it already passed during initial shell parse.
 (function () {
   var CDN = "https://cdn.jsdelivr.net/gh/arulbarker/affgo-cdn@main";
 
-  // Patch addEventListener
+  // Patch addEventListener once: when a script registers a DOMContentLoaded
+  // handler AFTER the event has already fired (which is always the case here
+  // since bundles load dynamically), invoke the handler on next microtask
+  // instead of silently ignoring it.
   var _origAdd = document.addEventListener;
   document.addEventListener = function (type, listener, opts) {
     if (type === 'DOMContentLoaded' && document.readyState !== 'loading') {
@@ -32,60 +38,22 @@
       + '</div>';
   }
 
-  function autoLogin() {
-    console.log('[Bootstrap] Auto-login as default user.');
-    const defaultEmail = 'user@affgo.com';
-    const defaultToken = 'auto-login-token';
-    const defaultName = 'User';
-
-    try {
-      localStorage.setItem("affiliatego_email", defaultEmail);
-      localStorage.setItem("affiliatego_token", defaultToken);
-      localStorage.setItem("affiliatego_name", defaultName);
-      
-      window.isAdFree = true;
-      window.favoritFeatureActive = true;
-      if (typeof updateAdFreeBadge === "function") updateAdFreeBadge();
-
-      var loginOverlay = document.getElementById('login-overlay');
-      if (loginOverlay) loginOverlay.style.display = 'none';
-      
-      var mainApp = document.getElementById('main-app');
-      if (mainApp) mainApp.classList.add('unlocked');
-      
-      var userBadge = document.getElementById('userInfoBadge');
-      if (userBadge) userBadge.classList.add('active');
-      
-      var nameDisplay = document.getElementById('userNameDisplay');
-      if (nameDisplay) nameDisplay.innerText = defaultName;
-
-      if (typeof bukaAplikasi === 'function') {
-          bukaAplikasi(defaultName);
-      }
-      
-      console.log('[Bootstrap] Auto-login successful.');
-    } catch (e) {
-      console.error('[Bootstrap] Auto-login failed:', e);
-    }
-  }
-
   (async function boot() {
     try {
-      // 1. Fetch body HTML
+      // 1. Fetch body HTML (the actual app structure: 86 tab panels, login, modals)
       var bodyRes = await fetch(CDN + '/body.html');
       if (!bodyRes.ok) throw new Error('Fetch body.html → HTTP ' + bodyRes.status);
       var bodyHtml = await bodyRes.text();
 
+      // 2. Swap placeholder loader with real body
       var loader = document.getElementById('__loader');
       if (loader) loader.remove();
       document.body.insertAdjacentHTML('afterbegin', bodyHtml);
 
-      // 2. Load ONLY bundle-classic.js (skip bundle-module.js)
+      // 3. Load bundles in original document order: classic first (was inline blocking),
+      //    then module (was deferred). Awaiting load preserves execution order.
       await loadScript(CDN + '/bundle-classic.js', false);
-      
-      // 3. Auto-login immediately after classic bundle loads
-      autoLogin();
-      
+      await loadScript(CDN + '/bundle-module.js', true);
     } catch (err) {
       console.error('Bootstrap failed:', err);
       showError(err && err.message ? err.message : String(err));
