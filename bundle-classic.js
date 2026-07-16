@@ -6448,208 +6448,42 @@
     
 ;
 
-        // ==================== KONFIGURASI ====================
-const SHEET_ID = '1_GxIcq6MHdz7-zB7CWyf6J7iPGc0zbAn7STDFXEH9F8';
-const APP_SECRET = 'TKD-2025-s3cr3t-k3y-9xKm2pQr7nVw4L';
-const PRODUCT_ID = 'affiliate-go';
+        // ⚠️ PENTING: GANTI URL INI DENGAN URL DEPLOY GOOGLE APPS SCRIPT ANDA ⚠️
+        // PASTE URL GOOGLE APPS SCRIPT ANDA DI BAWAH INI:
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwjrC0JgqBEtnWWG-aAOpbBKW2X6cpgTz-zUHv2oAzgWzXWXQwtV89FBnLNOrn5Vnsl/exec";
+        const APP_SECRET = "TKD-2025-s3cr3t-k3y-9xKm2pQr7nVw4L";
+        // ID produk harus cocok persis dengan key di PRODUCTS object di appscript.txt (GAS).
+        // Tanpa ini, server fallback cari email di SEMUA sheet → email VocaLive/TikDance dll. bisa login ke AffGo.
+        const PRODUCT_ID = "affiliate-go";
 
-// ==================== FUNGSI UTAMA ====================
-function doGet(e) {
-  const action = e.parameter.action || '';
-  let response = { status: 'ERROR', message: 'Invalid action' };
+        // ==================== BEBAS IKLAN — KONFIGURASI ====================
+        // GANTI URL DI BAWAH SAAT SUDAH SIAP:
+        //   - AD_URL: Adsterra Direct/Smart Link (sudah diisi)
+        //   - LYNK_BEBAS_IKLAN_URL: link checkout produk Bebas Iklan di Lynk.id
+        // Kalau salah satu masih "YOUR-...", sistem iklan otomatis non-aktif (failsafe).
+        const AD_URL = "https://www.profitablecpmratenetwork.com/cruvfekt?key=e9e907eb7243c5ba2443b17b570520f9";
+        const LYNK_BEBAS_IKLAN_URL = "https://lynk.id/arullagi/9plw09dw01l9";
+        // [v33+] Lynk.id paid feature: "fitur favorit tab affgo" (lifetime). Saat user
+        // klik bintang dan flag belum aktif → buka link ini di tab baru.
+        const LYNK_FAVORIT_FEATURE_URL = "https://lynk.id/arullagi/rm306vzjzjx0";
+        const AD_LOCK_DURATION_MS = 10000; // overlay countdown 10 detik
+        const AD_COOLDOWN_MS = 5000;       // jeda min antar trigger iklan
+        // POC: hanya tab Membuat Model dulu — kalau OK, baru rollout ke semua tab.
 
-  try {
-    switch(action) {
-      case 'login':
-        response = handleLogin(e.parameter);
-        break;
-      case 'cek':
-        response = handleCekSesi(e.parameter);
-        break;
-      case 'register':
-        response = handleRegister(e.parameter);
-        break;
-      case 'update':
-        response = handleUpdate(e.parameter);
-        break;
-      default:
-        response = { status: 'ERROR', message: 'Unknown action' };
-    }
-  } catch (error) {
-    response = { status: 'ERROR', message: error.toString() };
-  }
+        window.isAdFree = false;
+        // [v33+] Favorit Tab feature gate. Default OFF — di-set true oleh login/cek
+        // response kalau user sudah bayar (kolom M = "AKTIF" di sheet Affiliate GO Users).
+        window.favoritFeatureActive = false;
+        let __lastAdTime = 0;
+        let __adInProgress = false;
 
-  return ContentService
-    .createTextOutput(JSON.stringify(response))
-    .setMimeType(ContentService.MimeType.JSON);
-}
+        function __adsConfigured() {
+            return AD_URL.indexOf("YOUR-") === -1;
+        }
+        function __lynkConfigured() {
+            return LYNK_BEBAS_IKLAN_URL.indexOf("YOUR-") === -1;
+        }
 
-// ==================== LOGIN ====================
-function handleLogin(params) {
-  const { email, token, app_secret } = params;
-
-  // Validasi secret
-  if (app_secret !== APP_SECRET) {
-    return { status: 'ERROR', message: 'Invalid secret' };
-  }
-
-  // Buka sheet
-  const ss = SpreadsheetApp.openById(SHEET_ID);
-  const sheet = ss.getSheetByName('Users');
-  
-  if (!sheet) {
-    return { status: 'ERROR', message: 'Sheet Users tidak ditemukan' };
-  }
-
-  // Cari email (Kolom A = email)
-  const data = sheet.getDataRange().getValues();
-  let userRow = -1;
-  let userData = null;
-
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === email) {
-      userRow = i;
-      userData = data[i];
-      break;
-    }
-  }
-
-  if (userRow === -1) {
-    return { 
-      status: 'ERROR', 
-      message: 'Email tidak terdaftar. Pastikan sudah memiliki akses.' 
-    };
-  }
-
-  // Update token dan timestamp
-  const now = new Date();
-  sheet.getRange(userRow + 1, 2).setValue(token);   // Kolom B = token
-  sheet.getRange(userRow + 1, 5).setValue(now);     // Kolom E = last_login
-
-  return {
-    status: 'SUKSES',
-    nama: userData[2] || 'User',
-    ad_free: userData[3] === 'AKTIF' ? true : false,
-    message: 'Login berhasil'
-  };
-}
-
-// ==================== CEK SESI ====================
-function handleCekSesi(params) {
-  const { email, token, app_secret } = params;
-
-  if (app_secret !== APP_SECRET) {
-    return { status: 'INVALID', message: 'Invalid secret' };
-  }
-
-  const ss = SpreadsheetApp.openById(SHEET_ID);
-  const sheet = ss.getSheetByName('Users');
-  
-  if (!sheet) {
-    return { status: 'INVALID', message: 'Sheet not found' };
-  }
-
-  const data = sheet.getDataRange().getValues();
-  let userRow = -1;
-  let userData = null;
-
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === email && data[i][1] === token) {
-      userRow = i;
-      userData = data[i];
-      break;
-    }
-  }
-
-  if (userRow === -1) {
-    return { status: 'INVALID', message: 'Token tidak valid' };
-  }
-
-  sheet.getRange(userRow + 1, 5).setValue(new Date());
-
-  return {
-    status: 'VALID',
-    nama: userData[2] || 'User',
-    ad_free: userData[3] === 'AKTIF' ? true : false,
-    message: 'Sesi valid'
-  };
-}
-
-// ==================== REGISTER ====================
-function handleRegister(params) {
-  const { email, nama, app_secret } = params;
-
-  if (app_secret !== APP_SECRET) {
-    return { status: 'ERROR', message: 'Invalid secret' };
-  }
-
-  const ss = SpreadsheetApp.openById(SHEET_ID);
-  const sheet = ss.getSheetByName('Users');
-  
-  if (!sheet) {
-    return { status: 'ERROR', message: 'Sheet Users tidak ditemukan' };
-  }
-
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === email) {
-      return { status: 'ERROR', message: 'Email sudah terdaftar' };
-    }
-  }
-
-  const newRow = [
-    email,
-    '',
-    nama || email.split('@')[0],
-    'NONAKTIF',
-    new Date()
-  ];
-  sheet.appendRow(newRow);
-
-  return {
-    status: 'SUKSES',
-    message: 'Registrasi berhasil. Silakan login.'
-  };
-}
-
-// ==================== UPDATE STATUS ====================
-function handleUpdate(params) {
-  const { email, token, field, value, app_secret } = params;
-
-  if (app_secret !== APP_SECRET) {
-    return { status: 'ERROR', message: 'Invalid secret' };
-  }
-
-  const ss = SpreadsheetApp.openById(SHEET_ID);
-  const sheet = ss.getSheetByName('Users');
-  
-  if (!sheet) {
-    return { status: 'ERROR', message: 'Sheet Users tidak ditemukan' };
-  }
-
-  const data = sheet.getDataRange().getValues();
-  let userRow = -1;
-
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === email && data[i][1] === token) {
-      userRow = i;
-      break;
-    }
-  }
-
-  if (userRow === -1) {
-    return { status: 'ERROR', message: 'User tidak ditemukan' };
-  }
-
-  if (field === 'ad_free') {
-    sheet.getRange(userRow + 1, 4).setValue(value ? 'AKTIF' : 'NONAKTIF');
-  }
-
-  return {
-    status: 'SUKSES',
-    message: 'Update berhasil'
-  };
-}
         // Buka iklan di tab baru + tampilkan overlay countdown 10 detik (locked).
         // Resolve setelah countdown selesai → caller bisa lanjutkan aksi asli.
         function __showAdAndWait() {
