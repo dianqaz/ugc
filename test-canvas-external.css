@@ -1,0 +1,16 @@
+/* Diagnostic CSS for Canvas external script test.
+   Sets a custom property the HTML can detect via getComputedStyle to confirm
+   the external stylesheet was actually loaded and applied. */
+:root {
+  --ext-css-loaded: yes;
+}
+
+.test.pass {
+  background: #0a3a1a !important;
+  border-color: #2a8a4a !important;
+}
+
+.test.fail {
+  background: #3a0a0a !important;
+  border-color: #8a2a2a !important;
+}
